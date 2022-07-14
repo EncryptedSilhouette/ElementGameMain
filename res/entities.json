@@ -1,0 +1,12 @@
+[
+  {
+    "id": "player",
+    "name": "player",
+    "components":
+    [
+      {
+        "id": "Transform"
+      }
+    ]
+  }
+]
