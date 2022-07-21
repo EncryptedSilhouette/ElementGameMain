@@ -1,5 +1,7 @@
 package data;
 
+import data.components.Renderer;
+import data.components.Transform;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
@@ -10,9 +12,11 @@ import java.util.LinkedHashMap;
 public class GameObject {
 
     private static final HashMap<String, JSONObject> objectRegistry = new HashMap<>();
-    public boolean isRenderable;
+
     public String name;
     public final String id;
+    public Transform transform;
+    public Renderer renderer;
     public final JSONObject objectData;
     private final LinkedHashMap<String, ObjectComponent> componentContainer = new LinkedHashMap<>();
 

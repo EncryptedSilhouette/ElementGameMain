@@ -1,109 +1,163 @@
 package core;
 
 import data.ObjectComponent;
-import data.components.*;
+import data.Scene;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.KeyEvent;
-import java.awt.event.KeyListener;
 import java.awt.image.BufferStrategy;
+import java.util.HashMap;
 
 public class Application {
+    public static boolean running = false;
+    private static boolean debug = false;
+    private static String state = "def";
+    private static Application instance;
 
-    static int FPS_LIMIT = 2000;
-    static boolean start = false, running = false, isFullscreen = false;
-    static String state = "def";
-    static JFrame window;
-    static Handler handler = new Handler();
-    static Thread drawThread = new Thread(Application::draw);
-    static final Dimension resolution = Toolkit.getDefaultToolkit().getScreenSize();
-    static final GraphicsDevice g_Device = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
+    private int ticks = 0, tickRate = 0, TICK_LIMIT = 60,
+                frames = 0, frameRate = 0, FRAME_LIMIT = 1000;
+    private boolean isFullscreen = false;
+    private JFrame window;
+    private final Thread drawThread = new Thread(this::draw);
+    private final Dimension resolution = Toolkit.getDefaultToolkit().getScreenSize();
+    private final GraphicsDevice g_Device = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
+    private final HashMap<String, Task<Object>> tasks = new HashMap<>();
+    private final HashMap<String, Task<Graphics2D>> renderTasks = new HashMap<>();
 
-    public static void main(String[] args) {
+    private Application() {
+        instance = this;
+    }
+
+    private void init() {
+        load();
+        createGameWindow();
+    }
+
+    private void load() {
+        ObjectComponent.load();
+        ResourceManager.load();
+    }
+
+    public void start() {
+        double updateCap = 1000f / TICK_LIMIT,
+               startTime, lastTime, newTime,
+               unprocessedTime = 0;
+
+        setState("config");
         createConfigWindow();
 
         //The following code pauses the thread reading this code using wait()
-        //The window runs on a separate thread and will notify this current thread to continue when the player presses "Play"
-        while (!start) { //if the thread unpauses without proper conditions it will be paused once again
-            synchronized (Application.class) {
-                try { Application.class.wait(); }
+        //The window runs on a separate thread and will notify this current thread to continue when the player.json presses "Play"
+        while (!running) { //if the thread unpauses without proper conditions it will be paused once again
+            synchronized (this) {
+                try { wait(); }
                 catch (InterruptedException ignored) {
                     //Ignores any thread interrupts
                 }
             }
         }
 
-        running = true;
         init();
-        start();
-    }
+        Scene.generateScene("dev_room");
 
-    static void init() {
-        load();
-        createGameWindow();
-    }
-
-    static void load() {
-        ObjectComponent.registerComponent("Transform", Transform::new);
-    }
-
-    static void start() {
-        double updateCap = 1000f / 60,
-               unprocessedTime = 0,
-               lastTime, newTime;
-
-        Debug.enableDebug();
-        lastTime = System.nanoTime();
         drawThread.start();
+        startTime = System.currentTimeMillis();
+        lastTime = System.nanoTime();
 
+        //Game loop
         while (running) {
             newTime = System.nanoTime();
             unprocessedTime += (newTime - lastTime) / 1000000;
             lastTime = newTime;
-            //following code gets caught up on updates when lagging behind
+
             while (unprocessedTime >= updateCap) {
-                unprocessedTime -= updateCap;
-                //update();
+                try {
+                    unprocessedTime -= updateCap;
+
+                    //Update
+                    Handler.getInstance().update();
+
+                    //Preform extra tasks
+                    for (Task<Object> task: tasks.values()) {
+                         task.task(null);
+                    }
+                    ticks++;
+
+                    //Update ticks per second
+                    if (System.currentTimeMillis() - startTime >= 1000) {
+                        startTime = System.currentTimeMillis();
+                        tickRate = ticks;
+                        ticks = 0;
+                    }
+                }
+                catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         }
     }
 
-    static void draw() {
-        double frameCap = 1000f / FPS_LIMIT,
-               unprocessedTime = 0,
-               lastTime, newTime;
+    private void draw() {
+
+        //java's garbage collector is... fun, hence why i declare everything outside of loops when i can; this literally led to a 12.5% increase in performance...
+        double frameCap = 1000f / FRAME_LIMIT,
+               startTime, lastTime, newTime,
+               unprocessedTime = 0;
 
         BufferStrategy bs;
-        Graphics2D graphics;
+        Graphics2D graphics = null;
 
         if (window.getBufferStrategy() == null) window.createBufferStrategy(2);
         bs = window.getBufferStrategy();
+        startTime = System.currentTimeMillis();
         lastTime = System.nanoTime();
 
+        //Render loop
         while (running) {
             newTime = System.nanoTime();
             unprocessedTime += (newTime - lastTime) / 1000000;
             lastTime = newTime;
 
-            if (unprocessedTime >= frameCap) {
-                unprocessedTime -= frameCap;
+            try {
+                while (unprocessedTime >= frameCap) {
+                    unprocessedTime -= frameCap;
+                    graphics = (Graphics2D) bs.getDrawGraphics();
+                    graphics.setColor(Color.black);
+                    graphics.fillRect(0,0, window.getWidth(), window.getHeight());
 
-                graphics = (Graphics2D) bs.getDrawGraphics();
-                graphics.setColor(Color.black);
-                graphics.fillRect(0,0, Application.window.getWidth(), Application.window.getHeight());
+                    //Render everything and updates frames
+                    Handler.getInstance().render(graphics);
 
-                //Game.render(graphics);
+                    //Preform extra render tasks
+                    for (Task<Graphics2D> renderTask: renderTasks.values()) {
+                        renderTask.task(graphics);
+                    }
+                    frames++;
 
-                graphics.dispose();
-                bs.show();
+                    //update frames per second
+                    if (System.currentTimeMillis() - startTime >= 1000) {
+                        startTime = System.currentTimeMillis();
+                        frameRate = frames;
+                        frames = 0;
+                    }
 
-                if (Debug.isDebugMode()) Debug.fps++;
+                    graphics.dispose();
+                    bs.show();
+                }
+            }
+            catch (Exception e){
+                //If there is an error with rendering, it will attempt to fix common issues and dispose the graphics
+                if (window.getBufferStrategy() == null) {
+                    window.createBufferStrategy(2);
+                    bs = window.getBufferStrategy();
+                }
+                if (graphics != null) graphics.dispose();
             }
         }
     }
 
-    static void createConfigWindow() {
+    private void createConfigWindow() {
         window = new JFrame("Config");
         window.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         window.setSize(960, 540);
@@ -114,11 +168,10 @@ public class Application {
         JButton startButton = new JButton("Play");
         startButton.addActionListener(e -> {
             if (e.getSource() == startButton) {
-
                 //Notifies the main thread to continue
-                synchronized (Application.class) {
-                    start = true;
-                    Application.class.notify();
+                synchronized (Application.getInstance()) {
+                    Application.running = true;
+                    Application.getInstance().notify();
                 }
             }
         });
@@ -131,49 +184,18 @@ public class Application {
             }
         });
 
-        //Creates the commandListener
-        KeyListener commandListener = new KeyListener() {
-            boolean ALT_KEY0 = false, ALT_KEY1 = false, DEV_MODE = false;
-
-            @Override public void keyTyped(KeyEvent e) { /*Ignored Override*/ }
-
-            @Override
-            public void keyPressed(KeyEvent e) {
-                if (e.getKeyCode() == KeyEvent.VK_SHIFT)    ALT_KEY0 = true;
-                if (e.getKeyCode() == KeyEvent.VK_CONTROL)  ALT_KEY1 = true;
-                if (e.getKeyCode() == KeyEvent.VK_D)        DEV_MODE = true;
-                if (ALT_KEY0 && ALT_KEY1 && DEV_MODE) {
-                    //Notifies the main thread to continue and changes the game's state to dev mode
-                    synchronized (Application.class) {
-                        start = true;
-                        state = "dev";
-                        Application.class.notify();
-                    }
-                }
-            }
-
-            @Override
-            public void keyReleased(KeyEvent e) {
-                //Resets the key state if the player releases the key, this ensures that the player must hold down all 3 keys at the same time
-                if (e.getKeyCode() == KeyEvent.VK_SHIFT)    ALT_KEY0 = false;
-                if (e.getKeyCode() == KeyEvent.VK_CONTROL)  ALT_KEY1 = false;
-                if (e.getKeyCode() == KeyEvent.VK_D)        DEV_MODE = false;
-            }
-        };
-
         //sets up the components
         window.add(startButton);
         window.add(fullScreenMode);
         window.pack();
 
         //gets the window user ready
-        window.addKeyListener(commandListener);
         window.setLocationRelativeTo(null);
         window.setVisible(true);
         window.setFocusable(true);
     }
 
-    static void createGameWindow() {
+    private void createGameWindow() {
         //disposes the config window and sets it to a new instance
         window.dispose();
         window = new JFrame();
@@ -181,6 +203,7 @@ public class Application {
         //sets up the window
         window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         window.setSize(resolution.width, resolution.height);
+        window.setIgnoreRepaint(true);
         window.setResizable(false);
         window.setLayout(null);
 
@@ -188,9 +211,92 @@ public class Application {
         window.setLocationRelativeTo(null);
         window.setVisible(true);
         window.setFocusable(true);
+        window.addKeyListener(Input.createKeyListener());
 
         //Makes the game fullscreen
-        //Locks the FPS at 60 also?? IDK
+        //Locks the FPS at 60 also?? IDK something about BufferStrategy this page flipping that
         if (isFullscreen) g_Device.setFullScreenWindow(window);
+
+        addTask("debug_command", (ignored) -> {
+            if (Input.getKeyState(KeyEvent.VK_SHIFT) &&
+                Input.getKeyState(KeyEvent.VK_CONTROL) &&
+                Input.getKeyState(KeyEvent.VK_D)) {
+                showPerformanceStats(!debug);
+            }
+        });
+    }
+
+    //Created a task system to kinda act like C#'s delegates, fuck you java...
+    //If you need more info see Task
+    public void addTask(String taskID, Task<Object> task) {
+        tasks.put(taskID, task);
+    }
+
+    public void addRenderTask(String taskID, Task<Graphics2D> renderTask) {
+        renderTasks.put(taskID, renderTask);
+    }
+
+    public void removeTask(String taskID) {
+        tasks.remove(taskID);
+    }
+
+    public void removeRenderTask(String taskID) {
+        renderTasks.remove(taskID);
+    }
+
+    public static void showTickRate(boolean showFPS) {
+        //renders FPS if showFPS is true
+        if (showFPS) {
+            instance.addRenderTask("display_tickrate", (graphics) -> {
+                graphics.setColor(Color.RED);
+                graphics.drawString("Ticks: " + instance.tickRate + ", Limit: " + instance.TICK_LIMIT,16, 64);
+            });
+        }
+        else {
+            instance.removeRenderTask("display_tickrate");
+        }
+    }
+
+    public static void showFrameRate(boolean showFPS) {
+        //renders FPS if showFPS is true
+        if (showFPS) {
+            instance.addRenderTask("display_framerate", (graphics) -> {
+                graphics.setColor(Color.green);
+                graphics.drawString("FPS: " + instance.frameRate + ", Limit: " + instance.FRAME_LIMIT, 16, 80);
+            });
+        }
+        else {
+            instance.removeRenderTask("display_framerate");
+        }
+    }
+
+    public static void showPerformanceStats(boolean val) {
+        debug = val;
+        showTickRate(val);
+        showFrameRate(val);
+    }
+
+    public static void setState(String val) {
+        state = val;
+    }
+
+    public static Application CreateInstance() {
+        return new Application();
+    }
+
+    public static Application getInstance() {
+        return instance;
+    }
+
+    public static String getState() {
+        return state;
+    }
+
+    public JFrame getWindow() {
+        return window;
+    }
+
+    public static boolean debugEnabled() {
+        return debug;
     }
 }

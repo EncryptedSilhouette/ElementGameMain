@@ -1,0 +1,31 @@
+[
+  {
+    "id": "move_up",
+    "key_code": 87
+  },
+
+  {
+    "id": "move_down",
+    "key_code": 83
+  },
+
+  {
+    "id": "move_left",
+    "key_code": 65
+  },
+
+  {
+    "id": "move_right",
+    "key_code": 68
+  },
+
+  {
+    "id": "inventory",
+    "key_code": 73
+  },
+
+  {
+    "id": "attack",
+    "key_code": 32
+  }
+]

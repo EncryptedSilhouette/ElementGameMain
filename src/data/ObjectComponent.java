@@ -1,5 +1,8 @@
 package data;
 
+import data.components.Player;
+import data.components.Renderer;
+import data.components.Transform;
 import org.json.simple.JSONObject;
 
 import java.util.HashMap;
@@ -21,6 +24,13 @@ public abstract class ObjectComponent {
     public abstract void start();
     public abstract void update();
     public abstract void generate(JSONObject componentData);
+
+    public static void load() {
+        //registers components
+        ObjectComponent.registerComponent("Transform", Transform::new);
+        ObjectComponent.registerComponent("Renderer", Renderer::new);
+        ObjectComponent.registerComponent("Player", Player::new);
+    }
 
     public static void registerComponent(String id, ComponentFab<? extends ObjectComponent> constructor) {
         componentRegistry.put(id, constructor);

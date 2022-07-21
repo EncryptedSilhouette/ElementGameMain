@@ -1,0 +1,7 @@
+{
+  "id": "dev_room",
+  "entities":
+  [
+    "player"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "id": "player",
+  "name": "player",
+  "components":
+  [
+    {
+      "id": "Transform"
+    },
+
+    {
+      "id": "Renderer",
+      "texture_id": "player",
+      "render_layer": 1
+    },
+
+    {
+      "id": "Player",
+      "speed": 5
+    }
+  ]
+}

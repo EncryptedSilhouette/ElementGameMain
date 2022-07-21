@@ -1,0 +1,16 @@
+{
+  "id": "bandit",
+  "name": "bandit",
+  "components":
+  [
+    {
+      "id": "Transform"
+    },
+
+    {
+      "id": "Renderer",
+      "texture_id": "enemy",
+      "render_layer": 1
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+[
+  {
+    "id": "default",
+    "path": "res\\textures\\default.png"
+  },
+
+  {
+    "id": "player",
+    "path": "res\\textures\\player.png"
+  },
+
+  {
+    "id": "enemy",
+    "path": "res\\textures\\enemy.png"
+  },
+
+  {
+    "id": "fire_stone",
+    "path": "res\\textures\\fire_stone.png"
+  },
+
+  {
+    "id": "water_stone",
+    "path": "res\\textures\\water_stone.png"
+  },
+
+  {
+    "id": "cold_stone",
+    "path": "res\\textures\\cold_stone.png"
+  },
+
+  {
+    "id": "wind_stone",
+    "path": "res\\textures\\wind_stone.png"
+  },
+
+  {
+    "id": "energy_stone",
+    "path": "res\\textures\\energy_stone.png"
+  },
+
+  {
+    "id": "light_stone",
+    "path": "res\\textures\\light_stone.png"
+  },
+
+  {
+    "id": "dark_stone",
+    "path": "res\\textures\\dark_stone.png"
+  },
+
+  {
+    "id": "grey_stone",
+    "path": "res\\textures\\grey_stone.png"
+  },
+
+  {
+    "id": "void_stone",
+    "path": "res\\textures\\void_stone.png"
+  }
+]
+
